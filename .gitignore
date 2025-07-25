@@ -1,0 +1,14 @@
+# Skip Python virtual environment
+venv/
+
+# Skip student_data directory
+student_data/
+
+# Skip Node.js dependencies
+node_modules/
+
+# Skip environment file in backend
+backend/.env
+
+# Skip specific Word document
+Smart Notice Agent.docx

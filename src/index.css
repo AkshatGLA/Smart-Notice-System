@@ -1,0 +1,20 @@
+/* src/index.css */
+
+/* Tailwind CSS directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can add your own custom CSS here below the Tailwind directives */
+/* For example, if you want some global styles that Tailwind doesn't provide by default */
+body {
+  font-family: 'Arial', sans-serif;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Example of a custom class */
+.custom-card {
+  @apply bg-white shadow-lg rounded-lg p-6;
+}

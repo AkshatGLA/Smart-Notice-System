@@ -1,0 +1,13 @@
+flask
+flask-cors
+gevent
+joblib
+mongoengine
+openpyxl
+pandas
+pyjwt
+pymongo
+python-dotenv
+torch
+transformers
+werkzeug
