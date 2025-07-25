@@ -26,7 +26,10 @@ import RoleBasedRedirect from '../components/RoleBasedRedirect/RoleBasedRedirect
 import NoticeDetailPage from '../components/User/Notices/NoticeDtail.jsx'
 import MyDashboard from '../components/admin/DashBoard/MyDashBoard.jsx'
 import NoticeReadAnalytics from '../components/admin/Notices/NoticeReadAnalytics.jsx'
-import UploadStudents from '../components/admin/StudentDetails/UploadStudents.jsx'
+// --- STEP 1: Change the import from the old component... ---
+// import UploadStudents from '../components/admin/StudentDetails/UploadStudents.jsx' 
+// --- ...to the new, combined component. ---
+import UploadData from '../components/admin/StudentDetails/UploadData.jsx'; // Make sure this path is correct
 
 const router = createBrowserRouter([
   {
@@ -157,7 +160,8 @@ const router = createBrowserRouter([
         path: "/add-student-details",
         element: (
           <AuthLayout authentication={true} allowedRoles={['admin']}>
-            <UploadStudents />
+            {/* --- STEP 2: Use the new UploadData component here --- */}
+            <UploadData />
           </AuthLayout>
         )
       }

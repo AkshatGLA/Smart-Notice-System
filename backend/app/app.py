@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from mongoengine import connect, Document, EmbeddedDocument, EmbeddedDocumentField, StringField, DictField, ListField, DateTimeField, EmailField, IntField, BooleanField
-# from mongoengine import connect, Document, StringField, DictField, ListField, DateTimeField, EmailField, IntField,BooleanField
 from pymongo.errors import ConnectionFailure
 import os
 from dotenv import load_dotenv
@@ -35,7 +34,6 @@ CORS(app, resources={
 })
 
 # CORS(app)
-
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6k')
 
 # Database Connection
@@ -100,20 +98,18 @@ class Notice(Document):
         ]
     }
 
-# (Keep all your other imports and code as they are)
 
 class Student(Document):
     # Identification
     class_roll_no = StringField()
     univ_roll_no = StringField(required=True, unique=True)
-    course = StringField(required=True)  # e.g., B.Tech, M.Tech
-    branch = StringField(required=True)  # e.g., Computer Science
-    year = StringField()                 # <<-- ADD THIS LINE
-    section = StringField()              # <<-- ADD THIS LINE
+    course = StringField(required=True)
+    branch = StringField(required=True)
+    year = StringField()
+    section = StringField()
     
     # Personal Information
     name = StringField(required=True)
-    # ... (rest of your Student model is fine) ...
     name_hindi = StringField()
     father_name = StringField()
     mother_name = StringField()
@@ -146,27 +142,51 @@ class Student(Document):
     ratings = DictField()
     
     # System Fields
-    email = EmailField(unique=True, sparse=True) # Added sparse=True to allow multiple nulls if email is missing
+    email = EmailField(unique=True, sparse=True)
     password = StringField(required=True)
     raw_password = StringField()
     created_at = DateTimeField(default=datetime.datetime.utcnow)
     
     meta = {
         'collection': 'students',
+        'strict': False,  # <-- ADD THIS LINE
         'indexes': [
             'univ_roll_no',
             'course',
             'branch',
-            'year', # <<-- ADD THIS
-            'section', # <<-- ADD THIS
+            'year',
+            'section',
             'email',
+            'official_email'
+        ]
+    }
+
+class Teacher(Document):
+    employee_id = StringField(required=True, unique=True)
+    name = StringField(required=True)
+    department = StringField(required=True)
+    post = StringField()
+    specialization = StringField()
+    mobile = StringField()
+    official_email = EmailField(unique=True, sparse=True)
+    
+    # System Fields
+    email = EmailField(unique=True, sparse=True) # For login, if different from official
+    password = StringField(required=True)
+    raw_password = StringField()
+    created_at = DateTimeField(default=datetime.datetime.utcnow)
+    
+    meta = {
+        'collection': 'teachers',
+        'indexes': [
+            'employee_id',
+            'department',
             'official_email'
         ]
     }
 
 
 # Add these new models to app.py
-
 class Course(EmbeddedDocument):
     name = StringField(required=True)
     code = StringField(required=True, unique=True)
@@ -177,67 +197,6 @@ class Department(Document):
     courses = ListField(EmbeddedDocumentField(Course))
 
     meta = {'collection': 'departments'}
-
-# (Keep all your other models and routes)
-
-# class Student(Document):
-#     # Identification
-#     class_roll_no = StringField()
-#     univ_roll_no = StringField(required=True, unique=True)
-#     course = StringField(required=True)
-#     branch = StringField(required=True)
-    
-#     # Personal Information
-#     name = StringField(required=True)
-#     name_hindi = StringField()
-#     father_name = StringField()
-#     mother_name = StringField()
-#     dob = DateTimeField()
-#     gender = StringField()
-#     address = StringField()
-    
-#     # Contact Information
-#     student_mobile = StringField()
-#     student_alt_contact = StringField()
-#     father_mobile = StringField()
-#     father_alt_contact = StringField()
-#     mother_contact = StringField()
-#     official_email = EmailField()
-    
-#     # Academic History
-#     file_no = StringField()
-#     high_school = DictField()
-#     intermediate = DictField()
-#     graduation = DictField()
-    
-#     # Additional Information
-#     lib_code = StringField()
-#     last_medium = StringField()
-#     admission_office = StringField()
-#     target_company = StringField()
-#     hobbies = StringField()
-    
-#     # Ratings
-#     ratings = DictField()
-    
-#     # System Fields
-#     email = EmailField(unique=True)
-#     password = StringField(required=True)
-#     raw_password = StringField()  # Only for initial communication
-#     created_at = DateTimeField(default=datetime.datetime.utcnow)
-    
-#     meta = {
-#         'collection': 'students',
-#         'indexes': [
-#             'univ_roll_no',
-#             'course',
-#             'branch',
-#             'email',
-#             'official_email'
-#         ]
-#     }
-
-
 
 def role_required(roles):
     def decorator(f):
@@ -421,7 +380,6 @@ def get_notices(current_user):
         return jsonify({"error": str(e)}), 500
 
 # Add these new routes to app.py
-
 @app.route('/api/years', methods=['GET'])
 @token_required
 def get_years(current_user):
@@ -444,88 +402,226 @@ def get_sections(current_user):
         return jsonify(sorted_sections), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-# @app.route("/api/notices", methods=["POST"])
-# @token_required
-# @role_required(['admin'])
-# def create_notice(current_user):
-#     try:
-#         # Handle form data with file uploads
-#         form_data = request.form
-        
-#         # Get file attachments
-#         attachments = []
-#         if 'attachments' in request.files:
-#             for file in request.files.getlist('attachments'):
-#                 if file.filename != '':
-#                     # In a real app, save files to storage (S3, local, etc.)
-#                     filename = secure_filename(file.filename)
-#                     attachments.append(filename)
-#                     # file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    
+@app.route("/api/teachers/upload-details", methods=["POST"])
+@token_required
+@role_required(['admin'])
+def upload_teacher_details(current_user):
+    COLUMN_MAP = {
+        'employee_id': ['employee id', 'employee_id', 'emp_id'],
+        'name': ['name', 'teacher name', 'teacher_name'],
+        'post': ['post', 'designation'],
+        'specialization': ['specialization', 'speciality'],
+        'mobile': ['mobile', 'contact no', 'phone'],
+        'official_email': ['email', 'official email', 'official_email']
+    }
 
-#         notice = Notice(
-#             title=form_data.get('title'),
-#             subject=form_data.get('subject', ''),
-#             content=form_data.get('content'),
-#             notice_type=form_data.get('noticeType', ''),
-#             departments=json.loads(form_data.get('departments', '[]')),
-#             program_course=form_data.get('programCourse', ''),
-#             specialization=form_data.get('specialization', 'core'),
-#             year=form_data.get('year', ''),
-#             section=form_data.get('section', ''),
-#             recipient_emails=json.loads(form_data.get('recipient_emails', '[]')),
-#             priority=form_data.get('priority', 'Normal'),
-#             send_options=json.loads(form_data.get('send_options', '{"email": false, "web": true}')),
-#             schedule_date=form_data.get('schedule_date', 'false').lower() == 'true',
-#             schedule_time=form_data.get('schedule_time', 'false').lower() == 'true',
-#             date=form_data.get('date', ''),
-#             time=form_data.get('time', ''),
-#             from_field=form_data.get('from', ''),
-#             status=form_data.get('status', 'draft'),
-#             created_by=str(current_user.id),
-#             attachments=attachments
-#         )
+    try:
+        department = request.form.get('department')
+        file = request.files.get('file')
 
-#         # Handle scheduling
-#         if notice.schedule_date and notice.date:
-#             if notice.schedule_time and notice.time:
-#                 # Combine date and time
-#                 datetime_str = f"{notice.date} {notice.time}"
-#                 notice.publish_at = datetime.datetime.strptime(datetime_str, '%Y-%m-%d %H:%M')
-#             else:
-#                 notice.publish_at = datetime.datetime.strptime(notice.date, '%Y-%m-%d')
+        if not all([department, file]):
+            return jsonify({"error": "Department and file are required."}), 400
+
+        print("✅ Teacher file received. Attempting to read...")
+        try:
+            df = pd.read_excel(file) if file.filename.lower().endswith(('.xlsx', '.xls')) else pd.read_csv(file, encoding='utf-8', skipinitialspace=True)
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({"error": f"Could not read the file. Details: {str(e)}"}), 400
+
+        df.columns = [col.strip().lower() for col in df.columns]
+        df = df.fillna('')
+        print(f"✅ File read successfully. Found {len(df)} rows.")
+
+        teachers_to_create = []
+        conflicts = [] # <-- MODIFIED: Will hold full data for conflicting teachers
+        errors = []    # <-- For actual processing errors
+
+        for index, row in df.iterrows():
+            employee_id = str(get_column_value(row, COLUMN_MAP, 'employee_id'))
+            if not employee_id:
+                errors.append(f"Row {index + 2}: Skipped. Missing Employee ID.")
+                continue
+
+            # --- MODIFIED LOGIC: CHECK FOR CONFLICTS ---
+            if Teacher.objects(employee_id=employee_id).first():
+                # This is a conflict. Capture all data from the file row.
+                conflict_data = {
+                    'employee_id': employee_id,
+                    'name': get_column_value(row, COLUMN_MAP, 'name'),
+                    'post': get_column_value(row, COLUMN_MAP, 'post'),
+                    'specialization': get_column_value(row, COLUMN_MAP, 'specialization'),
+                    'mobile': get_column_value(row, COLUMN_MAP, 'mobile'),
+                    'official_email': get_column_value(row, COLUMN_MAP, 'official_email'),
+                    'department': department # Department comes from the form
+                }
+                conflicts.append(conflict_data)
+                continue
+
+            raw_password = generate_password()
+            official_email = get_column_value(row, COLUMN_MAP, 'official_email')
+            login_email = official_email if official_email else f"{employee_id}@university.edu"
+
+            teacher = Teacher(
+                employee_id=employee_id,
+                name=get_column_value(row, COLUMN_MAP, 'name'),
+                department=department,
+                post=get_column_value(row, COLUMN_MAP, 'post'),
+                specialization=get_column_value(row, COLUMN_MAP, 'specialization'),
+                mobile=get_column_value(row, COLUMN_MAP, 'mobile'),
+                official_email=official_email,
+                email=login_email.lower(),
+                password=generate_password_hash(raw_password),
+                raw_password=raw_password
+            )
+            teachers_to_create.append(teacher)
+
+        if teachers_to_create:
+            Teacher.objects.insert(teachers_to_create)
+
+        message = f"Process complete. Successfully created {len(teachers_to_create)} new teachers."
+        if not teachers_to_create and not conflicts and not errors:
+             message = "No new teachers were added. The file may have been empty or contained only existing records."
+
+        # --- MODIFIED RESPONSE ---
+        return jsonify({
+            "message": message,
+            "conflicts": conflicts, # Send back detailed conflict info
+            "errors": errors
+        }), 201
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"An unexpected server error occurred: {str(e)}"}), 500
+
+@app.route("/api/teachers/batch-update", methods=["POST"])
+@token_required
+@role_required(['admin'])
+def batch_update_teachers(current_user):
+    try:
+        teachers_to_update = request.json
+        if not isinstance(teachers_to_update, list):
+            return jsonify({"error": "Invalid payload. Expected a list of teacher objects."}), 400
             
-#             if notice.publish_at > datetime.datetime.now():
-#                 notice.status = 'scheduled'
+        updated_count = 0
+        failed_ids = []
 
-#         notice.save()
-#         # Send email if the notice is published with email option enabled
-#         if notice.status == 'published' and notice.send_options.get('email') and notice.recipient_emails:
-#             print(f"Attempting to send email for notice: {notice.title}")
-#             send_bulk_email(
-#                 recipient_emails=notice.recipient_emails,
-#                 subject=notice.subject or notice.title,  # Use title if subject is empty
-#                 body=notice.content
-#             )
-#         # --- END OF ADDED CODE BLOCK ---
+        for teacher_data in teachers_to_update:
+            employee_id = teacher_data.get('employee_id')
+            if not employee_id:
+                continue
 
-
-#     except Exception as e:
-#         traceback.print_exc()
-#         return jsonify({"error": str(e)}), 500
-#         # In a real app, you would:
-#         # 1. Send emails if send_options.email is True
-#         # 2. Schedule tasks for future publishing if status is 'scheduled'
+            teacher = Teacher.objects(employee_id=employee_id).first()
+            if teacher:
+                teacher.name = teacher_data.get('name', teacher.name)
+                teacher.department = teacher_data.get('department', teacher.department)
+                teacher.post = teacher_data.get('post', teacher.post)
+                teacher.specialization = teacher_data.get('specialization', teacher.specialization)
+                teacher.mobile = teacher_data.get('mobile', teacher.mobile)
+                
+                official_email = teacher_data.get('official_email', teacher.official_email).lower()
+                if official_email:
+                    teacher.official_email = official_email
+                    teacher.email = official_email
+                
+                teacher.save()
+                updated_count += 1
+            else:
+                failed_ids.append(employee_id)
         
-#         return jsonify({
-#             "message": "Notice created successfully",
-#             "noticeId": str(notice.id)
-#         }), 201
+        message = f"Successfully updated {updated_count} teacher(s)."
+        if failed_ids:
+            message += f" Failed to find teachers with IDs: {', '.join(failed_ids)}."
+            
+        return jsonify({"message": message}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"An unexpected server error occurred: {str(e)}"}), 500
+    
+@app.route("/api/students/update-manual/<univ_roll_no>", methods=["PUT"])
+@token_required
+@role_required(['admin'])
+def update_student_manual(current_user, univ_roll_no):
+    try:
+        data = request.json
+        student = Student.objects(univ_roll_no=univ_roll_no).first()
+        if not student:
+            return jsonify({"error": "Student not found."}), 404
         
-#     except Exception as e:
-#         traceback.print_exc()
-#         return jsonify({"error": str(e)}), 500
+        student.branch = data.get('department', student.branch)
+        student.course = data.get('course', student.course)
+        student.year = data.get('year', student.year)
+        student.section = data.get('section', student.section)
+        student.name = data.get('name', student.name)
+        student.father_name = data.get('father_name', student.father_name)
+        student.father_mobile = data.get('father_mobile', student.father_mobile)
+        student.official_email = data.get('official_email', student.official_email).lower()
+        student.email = data.get('official_email', student.email).lower()
+        
+        student.save()
+        return jsonify({"message": f"Successfully updated student '{student.name}'."}), 200
+    except Exception as e:
+        return jsonify({"error": f"An unexpected server error: {str(e)}"}), 500
+    
+@app.route("/api/teachers/update-manual/<employee_id>", methods=["PUT"])
+@token_required
+@role_required(['admin'])
+def update_teacher_manual(current_user, employee_id):
+    try:
+        data = request.json
+        teacher = Teacher.objects(employee_id=employee_id).first()
+        if not teacher:
+            return jsonify({"error": "Teacher not found."}), 404
+            
+        teacher.department = data.get('department', teacher.department)
+        teacher.name = data.get('name', teacher.name)
+        teacher.post = data.get('post', teacher.post)
+        teacher.specialization = data.get('specialization', teacher.specialization)
+        teacher.mobile = data.get('mobile', teacher.mobile)
+        teacher.official_email = data.get('official_email', teacher.official_email).lower()
+        teacher.email = data.get('official_email', teacher.email).lower()
 
+        teacher.save()
+        return jsonify({"message": f"Successfully updated teacher '{teacher.name}'."}), 200
+    except Exception as e:
+        return jsonify({"error": f"An unexpected server error: {str(e)}"}), 500
 
+@app.route("/api/teachers/add-manual", methods=["POST"])
+@token_required
+@role_required(['admin'])
+def add_teacher_manual(current_user):
+    try:
+        data = request.json
+        employee_id = data.get('employee_id')
+        
+        existing_teacher = Teacher.objects(employee_id=employee_id).first()
+        if existing_teacher:
+            teacher_data = json.loads(existing_teacher.to_json())
+            return jsonify({
+                "error": f"Teacher with Employee ID '{employee_id}' already exists.",
+                "existing_data": teacher_data
+            }), 409
+
+        raw_password = generate_password()
+        teacher = Teacher(
+            department=data.get('department'),
+            employee_id=employee_id,
+            name=data.get('name'),
+            post=data.get('post'),
+            specialization=data.get('specialization'),
+            mobile=data.get('mobile'),
+            official_email=data.get('official_email', '').lower(),
+            email=data.get('official_email', '').lower(),
+            password=generate_password_hash(raw_password),
+            raw_password=raw_password
+        )
+        teacher.save()
+        return jsonify({"message": f"Successfully created teacher '{data.get('name')}'."}), 201
+    except Exception as e:
+        return jsonify({"error": f"An unexpected server error: {str(e)}"}), 500
+    
 @app.route("/api/notices", methods=["POST"])
 @token_required
 @role_required(['admin'])
@@ -562,8 +658,6 @@ def create_notice(current_user):
             print(f"Found {len(student_emails)} matching student emails.")
             for email in student_emails:
                 recipient_emails.add(email)
-
-        # --- END OF NEW LOGIC ---
 
         attachments = []
         if 'attachments' in request.files:
@@ -610,25 +704,6 @@ def create_notice(current_user):
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-# @app.route("/api/notices/<notice_id>/read", methods=["POST"])
-# @token_required
-# # @role_required(['admin'])
-# def mark_as_read(current_user, notice_id):
-#     try:
-#         user_data = {
-#             "userId": str(current_user.id),
-#             "readAt": datetime.datetime.utcnow().isoformat()
-#         }
-        
-#         Notice.objects(id=ObjectId(notice_id)).update_one(
-#             push__readBy=user_data
-#         )
-#         return jsonify({"message": "Marked as read"}), 200
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-
-# Add these new API routes to app.py
 
 @app.route('/api/departments', methods=['GET'])
 @token_required
@@ -825,76 +900,6 @@ def get_notice(current_user, notice_id):
         print(f"Error fetching notice: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Similarly update the update_notice endpoint
-# @app.route("/api/notices/<notice_id>", methods=["PUT"])
-# @token_required
-# @role_required(['admin'])
-# def update_notice(current_user, notice_id):
-#     try:
-#         notice = Notice.objects(id=ObjectId(notice_id), created_by=str(current_user.id)).first()
-#         if not notice:
-#             return jsonify({"error": "Notice not found or unauthorized"}), 404
-            
-#         form_data = request.form
-        
-#         # Update fields
-#         notice.title = form_data.get('title', notice.title)
-#         notice.subject = form_data.get('subject', notice.subject)
-#         notice.content = form_data.get('content', notice.content)
-#         notice.notice_type = form_data.get('notice_type', notice.notice_type)
-#         notice.departments = json.loads(form_data.get('departments', json.dumps(notice.departments)))
-#         notice.program_course = form_data.get('program_course', notice.program_course)
-#         notice.specialization = form_data.get('specialization', notice.specialization)
-#         notice.year = form_data.get('year', notice.year)
-#         notice.section = form_data.get('section', notice.section)
-#         notice.recipient_emails = json.loads(form_data.get('recipient_emails', json.dumps(notice.recipient_emails)))
-#         notice.priority = form_data.get('priority', notice.priority)
-#         notice.send_options = json.loads(form_data.get('send_options', json.dumps(notice.send_options)))
-#         notice.schedule_date = form_data.get('schedule_date', str(notice.schedule_date)).lower() == 'true'
-#         notice.schedule_time = form_data.get('schedule_time', str(notice.schedule_time)).lower() == 'true'
-#         notice.date = form_data.get('date', notice.date)
-#         notice.time = form_data.get('time', notice.time)
-#         notice.from_field = form_data.get('from', notice.from_field)
-#         notice.status = form_data.get('status', notice.status)
-        
-#         # Handle file attachments
-#         if 'attachments' in request.files:
-#             for file in request.files.getlist('attachments'):
-#                 if file.filename != '':
-#                     filename = secure_filename(file.filename)
-#                     notice.attachments.append(filename)
-#                     # file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-
-#         # Update scheduling
-#         if notice.schedule_date and notice.date:
-#             if notice.schedule_time and notice.time:
-#                 datetime_str = f"{notice.date} {notice.time}"
-#                 notice.publish_at = datetime.datetime.strptime(datetime_str, '%Y-%m-%d %H:%M')
-#             else:
-#                 notice.publish_at = datetime.datetime.strptime(notice.date, '%Y-%m-%d')
-            
-#             if notice.publish_at > datetime.datetime.now():
-#                 notice.status = 'scheduled'
-#             else:
-#                 notice.status = 'published'
-
-#         notice.updated_at = datetime.datetime.now()
-#         notice.save()
-#         # --- ADD THIS CODE BLOCK ---
-#         # Send email if the notice is published with email option enabled
-#         if notice.status == 'published' and notice.send_options.get('email') and notice.recipient_emails:
-#             print(f"Attempting to send email for updated notice: {notice.title}")
-#             send_bulk_email(
-#                 recipient_emails=notice.recipient_emails,
-#                 subject=notice.subject or notice.title, # Use title if subject is empty
-#                 body=notice.content
-#             )
-#         # --- END OF ADDED CODE BLOCK ---
-
-        
-#         return jsonify({"message": "Notice updated successfully"}), 200
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
 @app.route("/api/notices/<notice_id>", methods=["PUT"])
 @token_required
 @role_required(['admin'])
@@ -956,6 +961,7 @@ def update_notice(current_user, notice_id):
         return jsonify({"message": "Notice updated successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 @app.route("/api/notices/<notice_id>", methods=["DELETE"])
 @token_required
 @role_required(['admin'])
@@ -1167,32 +1173,43 @@ def upload_student_details(current_user):
         if not all([department, course, year, section, file]):
             return jsonify({"error": "Missing required form data or file."}), 400
 
-        print("✅ File received. Attempting to read...")
+        print("✅ Student file received. Attempting to read...")
         try:
             if file.filename.lower().endswith('.csv'):
                 df = pd.read_csv(file, encoding='utf-8', skipinitialspace=True)
             else:
                 df = pd.read_excel(file)
         except Exception as e:
-            print("❌ FAILED TO READ FILE. Error details below:")
             traceback.print_exc()
-            return jsonify({"error": f"Could not read the file. Please check the format. Details: {str(e)}"}), 400
+            return jsonify({"error": f"Could not read the file. Details: {str(e)}"}), 400
 
         df.columns = [col.strip().lower() for col in df.columns]
         df = df.fillna('')
         print(f"✅ File read successfully. Found {len(df)} rows.")
 
         students_to_create = []
-        errors = [] # This list will now be for skipped students
+        conflicts = []  # To hold conflicting student data from the file
+        errors = []     # For actual processing errors
 
         for index, row in df.iterrows():
             univ_roll_no = get_column_value(row, COLUMN_MAP, 'univ_roll_no')
             if not univ_roll_no:
-                errors.append(f"Row {index + 2}: Skipped. Could not find a University Roll Number.")
+                errors.append(f"Row {index + 2}: Skipped. Missing University Roll Number.")
                 continue
 
             if Student.objects(univ_roll_no=univ_roll_no).first():
-                errors.append(f"Row {index + 2}: Skipped. Student with Roll Number '{univ_roll_no}' already exists.")
+                # This is a conflict. Capture data from the file row.
+                conflict_data = {
+                    'branch': department, 'course': course, 'year': year, 'section': section,
+                    'univ_roll_no': univ_roll_no,
+                    'name': get_column_value(row, COLUMN_MAP, 'name'),
+                    'class_roll_no': get_column_value(row, COLUMN_MAP, 'class_roll_no'),
+                    'father_name': get_column_value(row, COLUMN_MAP, 'father_name'),
+                    'student_mobile': get_column_value(row, COLUMN_MAP, 'student_mobile'),
+                    'father_mobile': get_column_value(row, COLUMN_MAP, 'father_mobile'),
+                    'official_email': get_column_value(row, COLUMN_MAP, 'email'),
+                }
+                conflicts.append(conflict_data)
                 continue
 
             # This part is only reached for NEW students
@@ -1214,26 +1231,60 @@ def upload_student_details(current_user):
             )
             students_to_create.append(student)
 
-        # --- THIS IS THE KEY LOGIC CHANGE ---
-        # Only insert if there are new students to create.
         if students_to_create:
             Student.objects.insert(students_to_create)
 
-        # Always return a success response, but include the list of skipped students.
         message = f"Process complete. Successfully created {len(students_to_create)} new students."
-        if not students_to_create and errors:
-             message = "No new students were added."
-        
+        if not students_to_create and not conflicts and not errors:
+             message = "No new students were added. The file may have been empty or contained only existing records."
+
         return jsonify({
             "message": message,
-            "errors": errors  # List of skipped students
+            "conflicts": conflicts,
+            "errors": errors
         }), 201
 
     except Exception as e:
-        print("❌ An unexpected server error occurred:")
         traceback.print_exc()
         return jsonify({"error": f"An unexpected server error occurred: {str(e)}"}), 500
+     
+@app.route("/api/students/add-manual", methods=["POST"])
+@token_required
+@role_required(['admin'])
+def add_student_manual(current_user):
+    try:
+        data = request.json
+        univ_roll_no = data.get('univ_roll_no')
+        
+        existing_student = Student.objects(univ_roll_no=univ_roll_no).first()
+        if existing_student:
+            student_data = json.loads(existing_student.to_json())
+            return jsonify({
+                "error": f"Student with Roll Number '{univ_roll_no}' already exists.",
+                "existing_data": student_data
+            }), 409
+
+        raw_password = generate_password()
+        student = Student(
+            branch=data.get('department'),
+            course=data.get('course'),
+            year=data.get('year'),
+            section=data.get('section'),
+            name=data.get('name'),
+            univ_roll_no=univ_roll_no,
+            father_name=data.get('father_name'),
+            father_mobile=data.get('father_mobile'),
+            official_email=data.get('official_email', '').lower(),
+            email=data.get('official_email', '').lower(),
+            password=generate_password_hash(raw_password),
+            raw_password=raw_password
+        )
+        student.save()
+        return jsonify({"message": f"Successfully created student '{data.get('name')}'."}), 201
+    except Exception as e:
+        return jsonify({"error": f"An unexpected server error: {str(e)}"}), 500
     
+
 # Get students by branch/course (for notice targeting)
 @app.route("/api/students", methods=["GET"])
 @token_required
@@ -1386,55 +1437,3 @@ def seed_departments():
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
 
-
-
-
-# from flask import Flask
-# from flask_cors import CORS
-# from pymongo.errors import ConnectionFailure
-# from config import Config
-# from models.user_model import User
-# from models.notice_model import Notice
-# from controllers.auth import init_auth_routes
-# from controllers.notices import init_notice_routes
-# from controllers.user import init_user_routes
-# from mongoengine import connect
-
-# def create_app():
-#     app = Flask(__name__)
-#     app.config.from_object(Config)
-    
-#     # Initialize CORS
-#     CORS(app, resources={
-#         r"/api/*": {
-#             "origins": ["http://localhost:5173"],
-#             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-#             "allow_headers": ["Authorization", "Content-Type"],
-#             "supports_credentials": True
-#         }
-#     })
-    
-#     # Connect to MongoDB
-#     try:
-#         connect(
-#             db="smart-notice",
-#             host=app.config['MONGO_URI']
-#         )
-#         print("✅ MongoDB Connected Successfully!")
-#     except ConnectionFailure as e:
-#         print("❌ MongoDB Connection Failed:", str(e))
-    
-#     # Initialize routes
-#     init_auth_routes(app)
-#     init_notice_routes(app)
-#     init_user_routes(app)
-    
-#     @app.route("/")
-#     def hello():
-#         return "Smart Notice API - Ready for development"
-    
-#     return app
-
-# if __name__ == "__main__":
-#     app = create_app()
-#     app.run(debug=True, port=5001)

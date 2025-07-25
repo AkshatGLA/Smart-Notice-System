@@ -1,6 +1,8 @@
 import { FaChartBar, FaPlus, FaFileAlt } from "react-icons/fa";
 import { FaGear } from "react-icons/fa6";
 import { NavLink } from "react-router-dom";
+// In App.jsx
+// import UploadData from './pages/UploadData'; // Make sure this path is correct
 
 const Sidebar = () => {
   return (

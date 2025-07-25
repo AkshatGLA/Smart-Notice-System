@@ -1,0 +1,13 @@
+univ_roll_no (Required) - The unique university roll number for each student.
+
+name (Required) - The full name of the student.
+
+official_email (Highly Recommended) - The student's official email address. This is crucial for the notice-sending feature to work.
+
+class_roll_no (Recommended) - The student's roll number within their class.
+
+student_mobile (Recommended) - The student's mobile number.
+
+father_name (Recommended) - The student's father's name.
+
+father_mobile (Recommended) - The father's mobile number.
