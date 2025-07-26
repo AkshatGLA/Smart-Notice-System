@@ -17,22 +17,17 @@ export default function NoticeForm() {
             noticeBody: "",
             noticeType: "",
             department: "", // Will now store department code
-            course: "",     // New field for course name
+            course: "",
             year: "",
             section: "",
-            recipientEmails: [], // For manually added emails
+            recipientEmails: [],
             priority: "Normal",
             attachments: [],
             sendOptions: { email: false, web: true },
-            scheduleDate: false,
-            scheduleTime: false,
-            date: "",
-            time: "",
-            from: ""
         }
     });
 
-    // --- NEW STATE FOR DYNAMIC DROPDOWNS ---
+    // --- STATE FOR DYNAMIC DROPDOWNS ---
     const [departments, setDepartments] = useState([]);
     const [courses, setCourses] = useState([]);
     const [years, setYears] = useState([]);
@@ -48,35 +43,41 @@ export default function NoticeForm() {
     const priorityOptions = ["Normal", "Urgent", "Highly Urgent"];
     const noticeTypes = ["Academic", "Event", "Exam", "Holiday", "Other"];
 
-    const selectedDeptCode = watch("department"); // Watch for changes in the department field
+    // --- WATCH FOR CHANGES IN DROPDOWN VALUES ---
+    const selectedDeptCode = watch("department");
+    const selectedCourse = watch("course");
+    const selectedYear = watch("year");
 
-    // --- FETCHING DATA FOR DROPDOWNS ---
+    // --- CHAINED DATA FETCHING LOGIC ---
+
+    // 1. Fetch initial departments
     useEffect(() => {
-        const fetchData = async (url, setter) => {
+        if (!token) return;
+        const fetchDepartments = async () => {
             try {
-                const response = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
-                if (!response.ok) throw new Error(`Failed to fetch data`);
+                const response = await fetch('http://localhost:5001/api/departments', { headers: { "Authorization": `Bearer ${token}` } });
+                if (!response.ok) throw new Error(`Failed to fetch departments`);
                 const data = await response.json();
-                setter(data);
+                setDepartments(data);
             } catch (err) {
                 setError(err.message);
             }
         };
-
-        if (token) {
-            fetchData('http://localhost:5001/api/departments', setDepartments);
-            fetchData('http://localhost:5001/api/years', setYears);
-            fetchData('http://localhost:5001/api/sections', setSections);
-        }
+        fetchDepartments();
     }, [token]);
 
-    // --- FETCHING COURSES WHEN A DEPARTMENT IS SELECTED ---
+    // 2. Fetch courses when a department is selected
     useEffect(() => {
-        if (!selectedDeptCode) {
-            setCourses([]);
-            setValue("course", "");
-            return;
-        }
+        // When department changes, reset all dependent fields and their options
+        setValue("course", "");
+        setCourses([]);
+        setValue("year", "");
+        setYears([]);
+        setValue("section", "");
+        setSections([]);
+
+        if (!selectedDeptCode) return; // Exit if no department is selected
+
         const fetchCourses = async () => {
              try {
                 const response = await fetch(`http://localhost:5001/api/departments/${selectedDeptCode}/courses`, {
@@ -92,13 +93,65 @@ export default function NoticeForm() {
         fetchCourses();
     }, [selectedDeptCode, token, setValue]);
 
-    // Fetch existing notice data when in edit mode
+    // 3. Fetch years when a course is selected
     useEffect(() => {
-        if (!isEditing) return;
-        // The rest of your original useEffect for fetching notice data is fine
-        // It will populate the form fields as before.
-        // Minor adjustments might be needed if the saved department name needs to be mapped back to a code.
-    }, [noticeId, isEditing, setValue]);
+        // When course changes, reset year and section
+        setValue("year", "");
+        setYears([]);
+        setValue("section", "");
+        setSections([]);
+
+        const departmentObject = departments.find(d => d.code === selectedDeptCode);
+        if (!departmentObject || !selectedCourse) return;
+
+        const fetchYears = async () => {
+             try {
+                const departmentName = departmentObject.name;
+                const response = await fetch(`http://localhost:5001/api/years?department=${encodeURIComponent(departmentName)}&course=${encodeURIComponent(selectedCourse)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch years');
+                const data = await response.json();
+                setYears(data);
+            } catch (err) {
+                setError(err.message);
+            }
+        };
+        fetchYears();
+    }, [selectedCourse, selectedDeptCode, departments, token, setValue]);
+
+
+    // 4. Fetch sections when a year is selected
+    useEffect(() => {
+        // When year changes, reset section
+        setValue("section", "");
+        setSections([]);
+
+        const departmentObject = departments.find(d => d.code === selectedDeptCode);
+        if (!departmentObject || !selectedCourse || !selectedYear) return;
+
+        const fetchSections = async () => {
+             try {
+                const departmentName = departmentObject.name;
+                const response = await fetch(`http://localhost:5001/api/sections?department=${encodeURIComponent(departmentName)}&course=${encodeURIComponent(selectedCourse)}&year=${encodeURIComponent(selectedYear)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch sections');
+                const data = await response.json();
+                setSections(data);
+            } catch (err) {
+                setError(err.message);
+            }
+        };
+        fetchSections();
+    }, [selectedYear, selectedCourse, selectedDeptCode, departments, token, setValue]);
+
+
+    // Fetch existing notice data when in edit mode (add this back if needed for editing)
+    useEffect(() => {
+        if (!isEditing || !token) return;
+        // Logic to fetch notice by ID and pre-fill the form would go here
+    }, [noticeId, isEditing, token, setValue]);
 
 
     const handleFileUpload = (e) => {
@@ -117,16 +170,13 @@ export default function NoticeForm() {
         setIsLoading(true);
         const formData = new FormData();
 
-        // --- UPDATED FORM DATA PREPARATION ---
         const departmentObject = departments.find(d => d.code === data.department);
-        if (departmentObject) {
-            formData.append('department', departmentObject.name);
-        }
+        // Important: The backend expects the *name* of the department.
+        formData.append('department', departmentObject ? departmentObject.name : '');
         formData.append('course', data.course);
         formData.append('year', data.year);
         formData.append('section', data.section);
         
-        // Append other fields as before
         formData.append('title', data.title);
         formData.append('subject', data.subject);
         formData.append('content', data.noticeBody);
@@ -186,14 +236,13 @@ export default function NoticeForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Left Column */}
                         <div className="space-y-4">
-                            {/* All your fields like Title, Subject, Notice Type, Priority, Scheduling remain here */}
-                             <div>
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Title*</label>
-                                <Controller name="title" control={control} render={({ field }) => <input {...field} type="text" className="w-full border border-gray-300 rounded-md px-3 py-2" required />}/>
+                                <Controller name="title" control={control} render={({ field }) => <input {...field} type="text" className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500" required />}/>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                                <Controller name="subject" control={control} render={({ field }) => <input {...field} type="text" className="w-full border border-gray-300 rounded-md px-3 py-2" />} />
+                                <Controller name="subject" control={control} render={({ field }) => <input {...field} type="text" className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500" />} />
                             </div>
                              <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Notice Body*</label>
@@ -220,14 +269,13 @@ export default function NoticeForm() {
 
                         {/* Right Column */}
                         <div className="space-y-4">
-                            {/* --- THIS ENTIRE TARGETING SECTION IS NEW --- */}
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-700 mb-2">Target Audience</h3>
-                                <div className="space-y-4 p-4 border rounded-md">
+                                <div className="space-y-4 p-4 border rounded-md bg-gray-50">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                                         <Controller name="department" control={control} render={({ field }) => (
-                                            <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2">
+                                            <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
                                                 <option value="">Select Department</option>
                                                 {departments.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
                                             </select>
@@ -236,7 +284,7 @@ export default function NoticeForm() {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
                                         <Controller name="course" control={control} render={({ field }) => (
-                                            <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2" disabled={!selectedDeptCode || courses.length === 0}>
+                                            <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-200 focus:ring-blue-500 focus:border-blue-500" disabled={!selectedDeptCode || courses.length === 0}>
                                                 <option value="">Select Course</option>
                                                 {courses.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
                                             </select>
@@ -246,7 +294,7 @@ export default function NoticeForm() {
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                                             <Controller name="year" control={control} render={({ field }) => (
-                                                <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2">
+                                                <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-200 focus:ring-blue-500 focus:border-blue-500" disabled={!selectedCourse || years.length === 0}>
                                                     <option value="">Select Year</option>
                                                     {years.map(y => <option key={y} value={y}>{y}</option>)}
                                                 </select>
@@ -255,7 +303,7 @@ export default function NoticeForm() {
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                                             <Controller name="section" control={control} render={({ field }) => (
-                                                <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2">
+                                                <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-200 focus:ring-blue-500 focus:border-blue-500" disabled={!selectedYear || sections.length === 0}>
                                                     <option value="">Select Section</option>
                                                     {sections.map(s => <option key={s} value={s}>{s}</option>)}
                                                 </select>
@@ -265,7 +313,6 @@ export default function NoticeForm() {
                                 </div>
                             </div>
                             
-                            {/* Additional Recipient Emails */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Additional Recipient Emails</label>
                                 <div className="border rounded-md p-2">
@@ -281,12 +328,11 @@ export default function NoticeForm() {
                                 </div>
                             </div>
 
-                             {/* Priority & Send Options */}
                              <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                                 <div className="grid grid-cols-3 gap-2">
                                 {priorityOptions.map(option => (
-                                    <button key={option} type="button" onClick={() => setValue("priority", option)} className={`py-2 px-3 rounded-md text-sm ${watch("priority") === option ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                                    <button key={option} type="button" onClick={() => setValue("priority", option)} className={`py-2 px-3 rounded-md text-sm transition-colors ${watch("priority") === option ? 'bg-blue-500 text-white shadow' : 'bg-gray-100 hover:bg-gray-200'}`}>
                                         {option}
                                     </button>
                                 ))}
@@ -295,17 +341,16 @@ export default function NoticeForm() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Send Via</label>
                                 <div className="flex space-x-4">
-                                    <label className="flex items-center"><Controller name="sendOptions.web" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2" />} />Web</label>
-                                    <label className="flex items-center"><Controller name="sendOptions.email" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2" />} />Email</label>
+                                    <label className="flex items-center"><Controller name="sendOptions.web" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500" />} />Web</label>
+                                    <label className="flex items-center"><Controller name="sendOptions.email" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500" />} />Email</label>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    {/* Action Buttons */}
                     <div className="mt-8 flex justify-end space-x-4">
-                        <button type="button" onClick={handleCancel} disabled={isLoading} className="px-4 py-2 bg-white border rounded-md">Cancel</button>
-                        <button type="button" onClick={handleSubmit(data => onSubmit(data, false))} disabled={isLoading} className="flex items-center px-4 py-2 bg-gray-500 text-white rounded-md"><RiDraftLine className="mr-2" />Save as Draft</button>
-                        <button type="submit" disabled={isLoading} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md"><IoMdSend className="mr-2" />{isLoading ? "Publishing..." : "Publish Notice"}</button>
+                        <button type="button" onClick={handleCancel} disabled={isLoading} className="px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                        <button type="button" onClick={handleSubmit(data => onSubmit(data, false))} disabled={isLoading} className="flex items-center px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50"><RiDraftLine className="mr-2" />Save as Draft</button>
+                        <button type="submit" disabled={isLoading} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"><IoMdSend className="mr-2" />{isLoading ? "Publishing..." : "Publish Notice"}</button>
                     </div>
                 </form>
             </div>
