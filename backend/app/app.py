@@ -64,10 +64,15 @@ class Notice(Document):
     content = StringField(required=True)
     notice_type = StringField()
     departments = ListField(StringField(), default=[])
-    program_course = StringField()
+
+    program_course = ListField(StringField(), default=[]) # Changed
+    year = ListField(StringField(), default=[])           # Changed
+    section = ListField(StringField(), default=[])   
+
+    # program_course = StringField()
     specialization = StringField(default="core")
-    year = StringField()
-    section = StringField()
+    # year = StringField()
+    # section = StringField()
     recipient_emails = ListField(StringField(), default=[])
     priority = StringField(choices=["Normal", "Urgent", "Highly Urgent"], default="Normal")
     status = StringField(default="draft", choices=["draft", "published", "scheduled"])
@@ -384,9 +389,16 @@ def get_notices(current_user):
 @token_required
 def get_years(current_user):
     try:
-        # Get a distinct list of all 'year' values from the Student collection
-        years = Student.objects.distinct('year')
-        # Filter out any empty or null values and sort them
+        # Use .getlist() to receive multiple values for the same key
+        department_names = request.args.getlist('department')
+        course_names = request.args.getlist('course')
+        
+        query = {}
+        if department_names: query['branch__in'] = department_names
+        if course_names: query['course__in'] = course_names
+        
+        # Get distinct years based on the combined query
+        years = Student.objects(**query).distinct('year')
         sorted_years = sorted([y for y in years if y])
         return jsonify(sorted_years), 200
     except Exception as e:
@@ -396,8 +408,16 @@ def get_years(current_user):
 @token_required
 def get_sections(current_user):
     try:
-        # Get a distinct list of all 'section' values
-        sections = Student.objects.distinct('section')
+        department_names = request.args.getlist('department')
+        course_names = request.args.getlist('course')
+        years = request.args.getlist('year')
+        
+        query = {}
+        if department_names: query['branch__in'] = department_names
+        if course_names: query['course__in'] = course_names
+        if years: query['year__in'] = years
+        
+        sections = Student.objects(**query).distinct('section')
         sorted_sections = sorted([s for s in sections if s])
         return jsonify(sorted_sections), 200
     except Exception as e:
@@ -624,82 +644,79 @@ def add_teacher_manual(current_user):
     
 @app.route("/api/notices", methods=["POST"])
 @token_required
-@role_required(['admin'])
 def create_notice(current_user):
     try:
         form_data = request.form
         
-        # --- NEW LOGIC TO FIND STUDENT EMAILS ---
-        target_department = form_data.get('department')
-        target_course = form_data.get('course')
-        target_year = form_data.get('year')
-        target_section = form_data.get('section')
+        # --- 1. Parse Targeting Criteria & Send Options from Form ---
+        target_departments = json.loads(form_data.get('departments', '[]'))
+        target_courses = json.loads(form_data.get('courses', '[]'))
+        target_years = json.loads(form_data.get('years', '[]'))
+        target_sections = json.loads(form_data.get('sections', '[]'))
+        # ADD THIS LINE to get the send options (e.g., {"email": true, "web": true})
+        send_options = json.loads(form_data.get('send_options', '{"email": false, "web": true}'))
         
-        recipient_emails = set() # Use a set to avoid duplicate emails
-        
-        # Add manually entered emails first
-        manual_emails_str = form_data.get('recipient_emails', '[]')
-        manual_emails = json.loads(manual_emails_str)
+        # --- 2. Build the Recipient Email List ---
+        recipient_emails = set() # Using a set automatically handles duplicates
+
+        # Add manually entered emails
+        manual_emails = json.loads(form_data.get('recipient_emails', '[]'))
         for email in manual_emails:
-            recipient_emails.add(email.strip())
+            if email.strip():
+                recipient_emails.add(email.strip())
 
-        # Query the database for students matching the criteria
-        if target_department and target_course and target_year and target_section:
-            query_params = {
-                'branch': target_department,
-                'course': target_course,
-                'year': target_year,
-                'section': target_section
-            }
-            print(f"Querying students with: {query_params}")
-            matching_students = Student.objects(**query_params)
-            
-            student_emails = [s.official_email for s in matching_students if s.official_email]
-            print(f"Found {len(student_emails)} matching student emails.")
-            for email in student_emails:
-                recipient_emails.add(email)
+        # Build query for students based on selections
+        student_query = {}
+        if target_departments: student_query['branch__in'] = target_departments
+        if target_courses: student_query['course__in'] = target_courses
+        if target_years: student_query['year__in'] = target_years
+        if target_sections: student_query['section__in'] = target_sections
+        
+        # Find matching students and add their emails
+        if student_query:
+            matching_students = Student.objects(**student_query)
+            for student in matching_students:
+                if student.official_email:
+                    recipient_emails.add(student.official_email)
 
-        attachments = []
-        if 'attachments' in request.files:
-            for file in request.files.getlist('attachments'):
-                if file.filename != '':
-                    filename = secure_filename(file.filename)
-                    attachments.append(filename)
+        # ADD THIS BLOCK to find matching teachers and add their emails
+        if target_departments:
+            matching_teachers = Teacher.objects(department__in=target_departments)
+            for teacher in matching_teachers:
+                if teacher.official_email:
+                    recipient_emails.add(teacher.official_email)
 
+        # --- 3. Create and Save the Notice ---
         notice = Notice(
             title=form_data.get('title'),
             subject=form_data.get('subject', ''),
             content=form_data.get('content'),
             notice_type=form_data.get('noticeType', ''),
-            # Store the single department for record-keeping
-            departments=[target_department] if target_department else [], 
-            program_course=target_course,
-            year=target_year,
-            section=target_section,
-            recipient_emails=list(recipient_emails), # Save the combined list of emails
+            departments=target_departments,
+            program_course=target_courses,
+            year=target_years,
+            section=target_sections,
+            recipient_emails=list(recipient_emails), # Save the full list for reference
             priority=form_data.get('priority', 'Normal'),
-            send_options=json.loads(form_data.get('send_options', '{"email": false, "web": true}')),
+            send_options=send_options, # Save the send options
             status=form_data.get('status', 'draft'),
-            created_by=str(current_user.id),
-            attachments=attachments
-            # Other fields like scheduling can be added back here if needed
+            created_by=str(current_user.id)
+            # attachment handling can remain here if you have it
         )
-
         notice.save()
         
-        # Send email if the notice is published, has email option, and has recipients
-        if notice.status == 'published' and notice.send_options.get('email') and notice.recipient_emails:
-            print(f"Attempting to send email for notice: {notice.title}")
+        # --- 4. ADD THIS BLOCK to Send Email if Published and Option is Selected ---
+        if notice.status == 'published' and send_options.get('email') and recipient_emails:
+            print(f"✅ Notice '{notice.title}' is published with email option. Preparing to send to {len(recipient_emails)} recipients.")
             send_bulk_email(
-                recipient_emails=notice.recipient_emails,
+                recipient_emails=list(recipient_emails),
                 subject=notice.subject or notice.title,
                 body=notice.content
             )
+        elif notice.status == 'published':
+            print(f"✅ Notice '{notice.title}' published, but email option was not selected or no recipients were found.")
         
-        return jsonify({
-            "message": "Notice created successfully",
-            "noticeId": str(notice.id)
-        }), 201
+        return jsonify({"message": "Notice created successfully", "noticeId": str(notice.id)}), 201
         
     except Exception as e:
         traceback.print_exc()
@@ -725,6 +742,35 @@ def get_courses_by_department(current_user, code):
         courses = sorted(department.courses, key=lambda c: c.name)
         return jsonify([{"name": c.name, "code": c.code} for c in courses]), 200
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
+# Add this new route to app.py
+@app.route('/api/courses-by-departments', methods=['POST'])
+@token_required
+def get_courses_by_departments(current_user):
+    try:
+        data = request.json
+        dept_codes = data.get('departments', [])
+        if not dept_codes:
+            return jsonify([]), 200
+
+        # Find all departments that match the provided codes
+        departments = Department.objects(code__in=dept_codes)
+        
+        # Use a dictionary to collect unique courses, preventing duplicates
+        all_courses = {} 
+        for dept in departments:
+            for course in dept.courses:
+                if course.code not in all_courses:
+                    all_courses[course.code] = {"name": course.name, "code": course.code}
+        
+        # Sort the unique courses by name before sending them back
+        sorted_courses = sorted(list(all_courses.values()), key=lambda c: c['name'])
+        
+        return jsonify(sorted_courses), 200
+    except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/notices/<notice_id>/read", methods=["POST"])

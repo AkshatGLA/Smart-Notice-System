@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaPaperclip, FaTimes, FaCalendarAlt, FaClock } from "react-icons/fa";
+import { FaPaperclip, FaTimes } from "react-icons/fa";
 import { IoMdSend } from "react-icons/io";
 import { RiDraftLine } from "react-icons/ri";
 import { useForm, Controller } from "react-hook-form";
-import RTE from "./RTE"; // Make sure this path matches your RTE component location
+import RTE from "./RTE";
+import MultiSelectDropdown from "./MultiSelectDropdown";
 
 export default function NoticeForm() {
     const { noticeId } = useParams();
@@ -16,25 +17,24 @@ export default function NoticeForm() {
             subject: "",
             noticeBody: "",
             noticeType: "",
-            department: "", // Will now store department code
-            course: "",
-            year: "",
-            section: "",
+            department: [],
+            course: [],
+            year: [],
+            section: [],
             recipientEmails: [],
             priority: "Normal",
             attachments: [],
-            sendOptions: { email: false, web: true },
+            sendOptions: { email: true, web: true }, // Default send options
         }
     });
 
-    // --- STATE FOR DYNAMIC DROPDOWNS ---
-    const [departments, setDepartments] = useState([]);
-    const [courses, setCourses] = useState([]);
-    const [years, setYears] = useState([]);
-    const [sections, setSections] = useState([]);
+    // --- STATE FOR DROPDOWN OPTIONS ---
+    const [departmentOptions, setDepartmentOptions] = useState([]);
+    const [courseOptions, setCourseOptions] = useState([]);
+    const [yearOptions, setYearOptions] = useState([]);
+    const [sectionOptions, setSectionOptions] = useState([]);
 
     const [isLoading, setIsLoading] = useState(false);
-    const [isFetching, setIsFetching] = useState(isEditing);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
     const navigate = useNavigate();
@@ -43,14 +43,18 @@ export default function NoticeForm() {
     const priorityOptions = ["Normal", "Urgent", "Highly Urgent"];
     const noticeTypes = ["Academic", "Event", "Exam", "Holiday", "Other"];
 
-    // --- WATCH FOR CHANGES IN DROPDOWN VALUES ---
-    const selectedDeptCode = watch("department");
-    const selectedCourse = watch("course");
-    const selectedYear = watch("year");
+    // --- WATCH FOR CHANGES IN SELECTED VALUES ---
+    const selectedDeptCodes = watch("department");
+    const selectedCourseNames = watch("course");
+    const selectedYears = watch("year");
+    const attachments = watch("attachments"); // Watch attachments for UI updates
 
-    // --- CHAINED DATA FETCHING LOGIC ---
+    // --- FIX: Create stable, stringified versions of arrays for useEffect dependencies ---
+    const stringifiedDeptCodes = useMemo(() => JSON.stringify(selectedDeptCodes), [selectedDeptCodes]);
+    const stringifiedCourseNames = useMemo(() => JSON.stringify(selectedCourseNames), [selectedCourseNames]);
+    const stringifiedYears = useMemo(() => JSON.stringify(selectedYears), [selectedYears]);
 
-    // 1. Fetch initial departments
+    // --- CHAINED DATA FETCHING LOGIC (Corrected) ---
     useEffect(() => {
         if (!token) return;
         const fetchDepartments = async () => {
@@ -58,109 +62,75 @@ export default function NoticeForm() {
                 const response = await fetch('http://localhost:5001/api/departments', { headers: { "Authorization": `Bearer ${token}` } });
                 if (!response.ok) throw new Error(`Failed to fetch departments`);
                 const data = await response.json();
-                setDepartments(data);
-            } catch (err) {
-                setError(err.message);
-            }
+                setDepartmentOptions(data);
+            } catch (err) { setError(err.message); }
         };
         fetchDepartments();
     }, [token]);
 
-    // 2. Fetch courses when a department is selected
     useEffect(() => {
-        // When department changes, reset all dependent fields and their options
-        setValue("course", "");
-        setCourses([]);
-        setValue("year", "");
-        setYears([]);
-        setValue("section", "");
-        setSections([]);
-
-        if (!selectedDeptCode) return; // Exit if no department is selected
-
+        const localSelectedDeptCodes = JSON.parse(stringifiedDeptCodes);
+        setValue("course", []);
+        setCourseOptions([]);
+        if (!localSelectedDeptCodes || localSelectedDeptCodes.length === 0) return;
         const fetchCourses = async () => {
-             try {
-                const response = await fetch(`http://localhost:5001/api/departments/${selectedDeptCode}/courses`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+            try {
+                const response = await fetch(`http://localhost:5001/api/courses-by-departments`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ departments: localSelectedDeptCodes })
                 });
                 if (!response.ok) throw new Error('Failed to fetch courses');
                 const data = await response.json();
-                setCourses(data);
-            } catch (err) {
-                setError(err.message);
-            }
+                setCourseOptions(data);
+            } catch (err) { setError(err.message); }
         };
         fetchCourses();
-    }, [selectedDeptCode, token, setValue]);
+    }, [stringifiedDeptCodes, token, setValue]);
 
-    // 3. Fetch years when a course is selected
     useEffect(() => {
-        // When course changes, reset year and section
-        setValue("year", "");
-        setYears([]);
-        setValue("section", "");
-        setSections([]);
-
-        const departmentObject = departments.find(d => d.code === selectedDeptCode);
-        if (!departmentObject || !selectedCourse) return;
-
+        const localSelectedDeptCodes = JSON.parse(stringifiedDeptCodes);
+        const localSelectedCourseNames = JSON.parse(stringifiedCourseNames);
+        setValue("year", []);
+        setYearOptions([]);
+        const selectedDeptNames = departmentOptions.filter(opt => localSelectedDeptCodes.includes(opt.code)).map(opt => opt.name);
+        if (selectedDeptNames.length === 0 || localSelectedCourseNames.length === 0) return;
+        const params = new URLSearchParams();
+        selectedDeptNames.forEach(name => params.append('department', name));
+        localSelectedCourseNames.forEach(name => params.append('course', name));
         const fetchYears = async () => {
-             try {
-                const departmentName = departmentObject.name;
-                const response = await fetch(`http://localhost:5001/api/years?department=${encodeURIComponent(departmentName)}&course=${encodeURIComponent(selectedCourse)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+            try {
+                const response = await fetch(`http://localhost:5001/api/years?${params.toString()}`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!response.ok) throw new Error('Failed to fetch years');
                 const data = await response.json();
-                setYears(data);
-            } catch (err) {
-                setError(err.message);
-            }
+                setYearOptions(data);
+            } catch (err) { setError(err.message); }
         };
         fetchYears();
-    }, [selectedCourse, selectedDeptCode, departments, token, setValue]);
+    }, [stringifiedDeptCodes, stringifiedCourseNames, token, setValue, departmentOptions]);
 
-
-    // 4. Fetch sections when a year is selected
     useEffect(() => {
-        // When year changes, reset section
-        setValue("section", "");
-        setSections([]);
-
-        const departmentObject = departments.find(d => d.code === selectedDeptCode);
-        if (!departmentObject || !selectedCourse || !selectedYear) return;
-
+        const localSelectedDeptCodes = JSON.parse(stringifiedDeptCodes);
+        const localSelectedCourseNames = JSON.parse(stringifiedCourseNames);
+        const localSelectedYears = JSON.parse(stringifiedYears);
+        setValue("section", []);
+        setSectionOptions([]);
+        const selectedDeptNames = departmentOptions.filter(opt => localSelectedDeptCodes.includes(opt.code)).map(opt => opt.name);
+        if (selectedDeptNames.length === 0 || localSelectedCourseNames.length === 0 || localSelectedYears.length === 0) return;
+        const params = new URLSearchParams();
+        selectedDeptNames.forEach(name => params.append('department', name));
+        localSelectedCourseNames.forEach(name => params.append('course', name));
+        localSelectedYears.forEach(year => params.append('year', year));
         const fetchSections = async () => {
              try {
-                const departmentName = departmentObject.name;
-                const response = await fetch(`http://localhost:5001/api/sections?department=${encodeURIComponent(departmentName)}&course=${encodeURIComponent(selectedCourse)}&year=${encodeURIComponent(selectedYear)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const response = await fetch(`http://localhost:5001/api/sections?${params.toString()}`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!response.ok) throw new Error('Failed to fetch sections');
                 const data = await response.json();
-                setSections(data);
-            } catch (err) {
-                setError(err.message);
-            }
+                setSectionOptions(data);
+            } catch (err) { setError(err.message); }
         };
         fetchSections();
-    }, [selectedYear, selectedCourse, selectedDeptCode, departments, token, setValue]);
-
-
-    // Fetch existing notice data when in edit mode (add this back if needed for editing)
-    useEffect(() => {
-        if (!isEditing || !token) return;
-        // Logic to fetch notice by ID and pre-fill the form would go here
-    }, [noticeId, isEditing, token, setValue]);
-
-
-    const handleFileUpload = (e) => {
-        setValue("attachments", [...watch("attachments"), ...Array.from(e.target.files)]);
-    };
-
-    const removeAttachment = (index) => {
-        setValue("attachments", watch("attachments").filter((_, i) => i !== index));
-    };
+    }, [stringifiedDeptCodes, stringifiedCourseNames, stringifiedYears, token, setValue, departmentOptions]);
 
     const onSubmit = async (data, publish = true) => {
         setError(null);
@@ -170,12 +140,13 @@ export default function NoticeForm() {
         setIsLoading(true);
         const formData = new FormData();
 
-        const departmentObject = departments.find(d => d.code === data.department);
-        // Important: The backend expects the *name* of the department.
-        formData.append('department', departmentObject ? departmentObject.name : '');
-        formData.append('course', data.course);
-        formData.append('year', data.year);
-        formData.append('section', data.section);
+        const departmentObjects = departmentOptions.filter(d => data.department.includes(d.code));
+        const departmentNames = departmentObjects.map(d => d.name);
+        
+        formData.append('departments', JSON.stringify(departmentNames));
+        formData.append('courses', JSON.stringify(data.course));
+        formData.append('years', JSON.stringify(data.year));
+        formData.append('sections', JSON.stringify(data.section));
         
         formData.append('title', data.title);
         formData.append('subject', data.subject);
@@ -185,7 +156,11 @@ export default function NoticeForm() {
         formData.append('status', publish ? 'published' : 'draft');
         formData.append('send_options', JSON.stringify(data.sendOptions));
         formData.append('recipient_emails', JSON.stringify(data.recipientEmails));
-        data.attachments.forEach(file => formData.append('attachments', file));
+        
+        // Append attachments
+        if (data.attachments && data.attachments.length > 0) {
+            data.attachments.forEach(file => formData.append('attachments', file));
+        }
 
         try {
             const response = await fetch("http://localhost:5001/api/notices", {
@@ -206,23 +181,9 @@ export default function NoticeForm() {
         }
     };
 
-    const handleEmailInput = (e) => {
-        if (e.key === 'Enter' || e.key === ',') {
-          e.preventDefault();
-          const value = e.target.value.trim();
-          if (value && !watch("recipientEmails").includes(value)) {
-            setValue("recipientEmails", [...watch("recipientEmails"), value]);
-            e.target.value = '';
-          }
-        }
-      };
-    
-      const removeEmail = (index) => {
-        const emails = watch("recipientEmails");
-        setValue("recipientEmails", emails.filter((_, i) => i !== index));
-      };
-
-      const handleCancel = () => navigate("/notices");
+    const handleFileUpload = (e) => setValue("attachments", [...watch("attachments"), ...Array.from(e.target.files)]);
+    const removeAttachment = (index) => setValue("attachments", watch("attachments").filter((_, i) => i !== index));
+    const handleCancel = () => navigate("/notices");
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -236,7 +197,7 @@ export default function NoticeForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Left Column */}
                         <div className="space-y-4">
-                            <div>
+                           <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Title*</label>
                                 <Controller name="title" control={control} render={({ field }) => <input {...field} type="text" className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500" required />}/>
                             </div>
@@ -248,18 +209,26 @@ export default function NoticeForm() {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Notice Body*</label>
                                 <Controller name="noticeBody" control={control} render={({ field }) => <RTE control={control} name="noticeBody" defaultValue={field.value} onChange={field.onChange} />}/>
                             </div>
+                            {/* RESTORED: Attachments Section */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
-                                <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-md inline-flex items-center">
-                                    <FaPaperclip className="mr-2" /> <span>Add Files</span>
-                                    <input type="file" className="hidden" multiple onChange={handleFileUpload} />
-                                </label>
-                                {watch("attachments").length > 0 && (
-                                    <div className="mt-2 space-y-1">
-                                        {watch("attachments").map((file, index) => (
-                                            <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded-md">
-                                                <span className="text-sm truncate">{file.name}</span>
-                                                <button type="button" onClick={() => removeAttachment(index)} className="text-red-500 hover:text-red-700"><FaTimes /></button>
+                                <div className="mt-2 flex items-center justify-center w-full">
+                                    <label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                            <FaPaperclip className="w-8 h-8 mb-2 text-gray-500" />
+                                            <p className="mb-2 text-sm text-gray-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                                        </div>
+                                        <input id="file-upload" type="file" className="hidden" multiple onChange={handleFileUpload} />
+                                    </label>
+                                </div>
+                                {attachments && attachments.length > 0 && (
+                                    <div className="mt-4 space-y-2">
+                                        {attachments.map((file, index) => (
+                                            <div key={index} className="flex justify-between items-center bg-gray-100 p-2 rounded-md">
+                                                <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                                                <button type="button" onClick={() => removeAttachment(index)} className="text-red-500 hover:text-red-700">
+                                                    <FaTimes />
+                                                </button>
                                             </div>
                                         ))}
                                     </div>
@@ -272,63 +241,14 @@ export default function NoticeForm() {
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-700 mb-2">Target Audience</h3>
                                 <div className="space-y-4 p-4 border rounded-md bg-gray-50">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                                        <Controller name="department" control={control} render={({ field }) => (
-                                            <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-blue-500 focus:border-blue-500">
-                                                <option value="">Select Department</option>
-                                                {departments.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
-                                            </select>
-                                        )} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
-                                        <Controller name="course" control={control} render={({ field }) => (
-                                            <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-200 focus:ring-blue-500 focus:border-blue-500" disabled={!selectedDeptCode || courses.length === 0}>
-                                                <option value="">Select Course</option>
-                                                {courses.map(c => <option key={c.code} value={c.name}>{c.name}</option>)}
-                                            </select>
-                                        )} />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-                                            <Controller name="year" control={control} render={({ field }) => (
-                                                <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-200 focus:ring-blue-500 focus:border-blue-500" disabled={!selectedCourse || years.length === 0}>
-                                                    <option value="">Select Year</option>
-                                                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                                                </select>
-                                            )} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                                            <Controller name="section" control={control} render={({ field }) => (
-                                                <select {...field} className="w-full border border-gray-300 rounded-md px-3 py-2 disabled:bg-gray-200 focus:ring-blue-500 focus:border-blue-500" disabled={!selectedYear || sections.length === 0}>
-                                                    <option value="">Select Section</option>
-                                                    {sections.map(s => <option key={s} value={s}>{s}</option>)}
-                                                </select>
-                                            )} />
-                                        </div>
-                                    </div>
+                                    <Controller name="department" control={control} render={({ field }) => ( <MultiSelectDropdown {...field} placeholder="Select Department(s)" options={departmentOptions.map(d => ({ label: d.name, value: d.code }))} /> )}/>
+                                    <Controller name="course" control={control} render={({ field }) => ( <MultiSelectDropdown {...field} placeholder="Select Course(s)" options={courseOptions.map(c => ({ label: c.name, value: c.name }))} disabled={courseOptions.length === 0} /> )}/>
+                                    <Controller name="year" control={control} render={({ field }) => ( <MultiSelectDropdown {...field} placeholder="Select Year(s)" options={yearOptions.map(y => ({ label: y, value: y }))} disabled={yearOptions.length === 0} /> )}/>
+                                    <Controller name="section" control={control} render={({ field }) => ( <MultiSelectDropdown {...field} placeholder="Select Section(s)" options={sectionOptions.map(s => ({ label: s, value: s }))} disabled={sectionOptions.length === 0} /> )}/>
                                 </div>
                             </div>
                             
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Additional Recipient Emails</label>
-                                <div className="border rounded-md p-2">
-                                    <div className="flex flex-wrap gap-2 mb-2">
-                                        {watch("recipientEmails").map((email, index) => (
-                                        <div key={index} className="flex items-center bg-gray-100 px-2 py-1 rounded-full text-xs">
-                                            {email}
-                                            <button type="button" onClick={() => removeEmail(index)} className="ml-1 text-gray-500 hover:text-gray-700"><FaTimes size={10} /></button>
-                                        </div>
-                                        ))}
-                                    </div>
-                                    <input type="text" onKeyDown={handleEmailInput} className="w-full border-0 px-1 py-1 focus:ring-0" placeholder="Type and press Enter to add emails..." />
-                                </div>
-                            </div>
-
-                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                                 <div className="grid grid-cols-3 gap-2">
                                 {priorityOptions.map(option => (
@@ -338,11 +258,19 @@ export default function NoticeForm() {
                                 ))}
                                 </div>
                             </div>
+
+                            {/* RESTORED: Send Via Section */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Send Via</label>
-                                <div className="flex space-x-4">
-                                    <label className="flex items-center"><Controller name="sendOptions.web" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500" />} />Web</label>
-                                    <label className="flex items-center"><Controller name="sendOptions.email" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500" />} />Email</label>
+                                <div className="flex items-center space-x-4 mt-2">
+                                    <label className="flex items-center cursor-pointer">
+                                        <Controller name="sendOptions.web" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />} />
+                                        <span className="text-sm">Web Platform</span>
+                                    </label>
+                                    <label className="flex items-center cursor-pointer">
+                                        <Controller name="sendOptions.email" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />} />
+                                        <span className="text-sm">Email</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
