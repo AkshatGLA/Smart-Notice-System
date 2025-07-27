@@ -23,7 +23,8 @@ from utils.email_send_function import send_bulk_email
 load_dotenv()
 
 app = Flask(__name__)
-
+UPLOAD_FOLDER = 'uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:3000","*"],  # Adjust for your frontend URL
@@ -34,8 +35,8 @@ CORS(app, resources={
 })
 
 # CORS(app)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6k')
-
+# app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6k')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a-super-secret-key-that-nobody-can-guess')
 # Database Connection
 MONGO_URI = os.environ.get('MONGO_URI')
 
@@ -645,27 +646,41 @@ def add_teacher_manual(current_user):
 @app.route("/api/notices", methods=["POST"])
 @token_required
 def create_notice(current_user):
+    attachment_paths = []
     try:
         form_data = request.form
-        
-        # --- 1. Parse Targeting Criteria & Send Options from Form ---
+        files = request.files.getlist('attachments')
+
+        # --- Handle Attachments ---
+        attachment_filenames = []
+        if files:
+            if not os.path.exists(app.config['UPLOAD_FOLDER']):
+                os.makedirs(app.config['UPLOAD_FOLDER'])
+            for file in files:
+                if file.filename != '':
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
+                    attachment_paths.append(file_path)
+                    attachment_filenames.append(filename)
+
+        # --- Parse Targeting Criteria & Send Options ---
         target_departments = json.loads(form_data.get('departments', '[]'))
         target_courses = json.loads(form_data.get('courses', '[]'))
         target_years = json.loads(form_data.get('years', '[]'))
         target_sections = json.loads(form_data.get('sections', '[]'))
-        # ADD THIS LINE to get the send options (e.g., {"email": true, "web": true})
         send_options = json.loads(form_data.get('send_options', '{"email": false, "web": true}'))
         
-        # --- 2. Build the Recipient Email List ---
-        recipient_emails = set() # Using a set automatically handles duplicates
+        # --- Build Recipient Email List ---
+        recipient_emails = set() # Use a set to automatically handle duplicates
 
-        # Add manually entered emails
+        # CORRECTED: Add manually entered emails from the form first
         manual_emails = json.loads(form_data.get('recipient_emails', '[]'))
         for email in manual_emails:
             if email.strip():
                 recipient_emails.add(email.strip())
 
-        # Build query for students based on selections
+        # Build query for students based on dropdown selections
         student_query = {}
         if target_departments: student_query['branch__in'] = target_departments
         if target_courses: student_query['course__in'] = target_courses
@@ -674,53 +689,62 @@ def create_notice(current_user):
         
         # Find matching students and add their emails
         if student_query:
-            matching_students = Student.objects(**student_query)
-            for student in matching_students:
+            for student in Student.objects(**student_query):
                 if student.official_email:
                     recipient_emails.add(student.official_email)
 
-        # ADD THIS BLOCK to find matching teachers and add their emails
+        # Find matching teachers and add their emails
         if target_departments:
-            matching_teachers = Teacher.objects(department__in=target_departments)
-            for teacher in matching_teachers:
+            for teacher in Teacher.objects(department__in=target_departments):
                 if teacher.official_email:
                     recipient_emails.add(teacher.official_email)
 
-        # --- 3. Create and Save the Notice ---
+        # --- Create and Save the Notice ---
         notice = Notice(
             title=form_data.get('title'),
             subject=form_data.get('subject', ''),
             content=form_data.get('content'),
-            notice_type=form_data.get('noticeType', ''),
             departments=target_departments,
             program_course=target_courses,
             year=target_years,
             section=target_sections,
-            recipient_emails=list(recipient_emails), # Save the full list for reference
+            recipient_emails=list(recipient_emails),
             priority=form_data.get('priority', 'Normal'),
-            send_options=send_options, # Save the send options
+            send_options=send_options,
             status=form_data.get('status', 'draft'),
-            created_by=str(current_user.id)
-            # attachment handling can remain here if you have it
+            created_by=str(current_user.id),
+            attachments=attachment_filenames
         )
         notice.save()
         
-        # --- 4. ADD THIS BLOCK to Send Email if Published and Option is Selected ---
+        # --- Send Email with Attachments ---
         if notice.status == 'published' and send_options.get('email') and recipient_emails:
-            print(f"✅ Notice '{notice.title}' is published with email option. Preparing to send to {len(recipient_emails)} recipients.")
+            print(f"✅ Preparing to send email to {len(recipient_emails)} recipients with {len(attachment_paths)} attachments.")
             send_bulk_email(
                 recipient_emails=list(recipient_emails),
                 subject=notice.subject or notice.title,
-                body=notice.content
+                body=notice.content,
+                attachments=attachment_paths
             )
         elif notice.status == 'published':
-            print(f"✅ Notice '{notice.title}' published, but email option was not selected or no recipients were found.")
-        
+             print(f"✅ Notice '{notice.title}' published, but email option was not selected or no recipients were found.")
+
         return jsonify({"message": "Notice created successfully", "noticeId": str(notice.id)}), 201
         
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+    finally:
+        # --- Cleanup: Remove temporary files ---
+        if attachment_paths:
+            print("Cleaning up temporary attachment files...")
+            for path in attachment_paths:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                        print(f"Removed temporary file: {path}")
+                except Exception as e:
+                    print(f"Error removing temporary file {path}: {e}")
 
 @app.route('/api/departments', methods=['GET'])
 @token_required
