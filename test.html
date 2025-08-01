@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<style>
+/* Add this style to position the eye button beside the password box */
+.form-group.password-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.form-group.password-group input[type="password"],
+.form-group.password-group input[type="text"] {
+    flex: 1 1 auto;
+    padding-right: 8px !important;
+}
+.password-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    outline: none;
+    font-size: 18px;
+    margin-left: -4px;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const passwordInput = document.getElementById('password');
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.tabIndex = -1;
+    toggleBtn.style.position = 'absolute';
+    toggleBtn.style.right = '10px';
+    toggleBtn.style.top = '32px';
+    toggleBtn.style.background = 'none';
+    toggleBtn.style.border = 'none';
+    toggleBtn.style.cursor = 'pointer';
+    toggleBtn.style.padding = '0';
+    toggleBtn.style.outline = 'none';
+    toggleBtn.innerHTML = '<span id="eyeIcon" aria-label="Show password" style="font-size:18px;">👁️</span>';
+
+    const passwordGroup = passwordInput.parentElement;
+    passwordGroup.style.position = 'relative';
+    passwordInput.style.paddingRight = '32px';
+    passwordGroup.appendChild(toggleBtn);
+
+    toggleBtn.addEventListener('click', function() {
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleBtn.innerHTML = '<span id="eyeIcon" aria-label="Hide password" style="font-size:18px;">🙈</span>';
+        } else {
+            passwordInput.type = 'password';
+            toggleBtn.innerHTML = '<span id="eyeIcon" aria-label="Show password" style="font-size:18px;">👁️</span>';
+        }
+    });
+});
+</script>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>project</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+        }
+        .form-box {
+            background: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            max-width: 350px;
+            margin: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .captcha-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .captcha-image {
+            background: #e0e0e0;
+            color: #333;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 4px;
+            letter-spacing: 2px;
+            font-family: monospace;
+            user-select: none;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+    </style>
+</head>
+<body>
+    <form class="form-box">
+        <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" autocomplete="off" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="off" required>
+        </div>
+        <div class="form-group">
+            <label for="captcha">Captcha</label>
+            <div class="captcha-box">
+                <span class="captcha-image" id="captchaText">A7B9C</span>
+                <input type="text" id="captcha" name="captcha" autocomplete="off" required placeholder="Enter captcha">
+            </div>
+        </div>
+        <button type="submit">Submit</button>
+    </form>
+</body>
+</htm

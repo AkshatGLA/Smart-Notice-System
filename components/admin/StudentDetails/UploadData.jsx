@@ -268,7 +268,9 @@ function StudentUploader() {
                         <div><label className="block text-sm font-medium">Full Name*</label><input type="text" {...register("name")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>
                         <div><label className="block text-sm font-medium">University Roll No.*</label><input type="text" {...register("univ_roll_no")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>
                         <div><label className="block text-sm font-medium">Official Email*</label><input type="email" {...register("official_email")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>
-                        <div><label className="block text-sm font-medium">Father's Name</label><input type="text" {...register("father_name")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>
+                        {/* ADD THIS NEW INPUT FIELD */}
+                        <div><label className="block text-sm font-medium">Mobile Number</label><input type="text" {...register("student_mobile")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>
+                        <div className="md:col-span-2"><label className="block text-sm font-medium">Father's Name</label><input type="text" {...register("father_name")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>                        <div><label className="block text-sm font-medium">Father's Name</label><input type="text" {...register("father_name")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>
                         <div><label className="block text-sm font-medium">Father's Mobile</label><input type="text" {...register("father_mobile")} className="w-full mt-1 px-3 py-2 border rounded-md"/></div>
                     </div>
                     {conflictingStudent ? (

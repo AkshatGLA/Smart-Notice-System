@@ -18,6 +18,7 @@ import random
 import string
 from io import BytesIO
 from datetime import timedelta
+from utils.whatsapp_sender_function import send_bulk_whatsapp
 # Add this import near the top with your other imports
 from utils.email_send_function import send_bulk_email
 load_dotenv()
@@ -576,6 +577,7 @@ def update_student_manual(current_user, univ_roll_no):
         student.year = data.get('year', student.year)
         student.section = data.get('section', student.section)
         student.name = data.get('name', student.name)
+        student.student_mobile = data.get('student_mobile', student.student_mobile) # ADD THIS LINE
         student.father_name = data.get('father_name', student.father_name)
         student.father_mobile = data.get('father_mobile', student.father_mobile)
         student.official_email = data.get('official_email', student.official_email).lower()
@@ -651,7 +653,7 @@ def create_notice(current_user):
         form_data = request.form
         files = request.files.getlist('attachments')
 
-        # --- Handle Attachments ---
+        # --- Handle Attachments (Unchanged) ---
         attachment_filenames = []
         if files:
             if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -669,37 +671,35 @@ def create_notice(current_user):
         target_courses = json.loads(form_data.get('courses', '[]'))
         target_years = json.loads(form_data.get('years', '[]'))
         target_sections = json.loads(form_data.get('sections', '[]'))
-        send_options = json.loads(form_data.get('send_options', '{"email": false, "web": true}'))
+        send_options = json.loads(form_data.get('send_options', '{"email": false, "web": true, "whatsapp": false}'))
         
-        # --- Build Recipient Email List ---
-        recipient_emails = set() # Use a set to automatically handle duplicates
+        # --- Build Recipient Lists ---
+        recipient_emails = set()
+        recipient_numbers = set() # NEW: For WhatsApp numbers
 
-        # CORRECTED: Add manually entered emails from the form first
         manual_emails = json.loads(form_data.get('recipient_emails', '[]'))
         for email in manual_emails:
-            if email.strip():
-                recipient_emails.add(email.strip())
+            if email.strip(): recipient_emails.add(email.strip())
 
-        # Build query for students based on dropdown selections
+        # Build query for students
         student_query = {}
         if target_departments: student_query['branch__in'] = target_departments
         if target_courses: student_query['course__in'] = target_courses
         if target_years: student_query['year__in'] = target_years
         if target_sections: student_query['section__in'] = target_sections
         
-        # Find matching students and add their emails
         if student_query:
             for student in Student.objects(**student_query):
-                if student.official_email:
-                    recipient_emails.add(student.official_email)
+                if student.official_email: recipient_emails.add(student.official_email)
+                if student.student_mobile: recipient_numbers.add(student.student_mobile.strip()) # NEW
 
-        # Find matching teachers and add their emails
+        # Find matching teachers
         if target_departments:
             for teacher in Teacher.objects(department__in=target_departments):
-                if teacher.official_email:
-                    recipient_emails.add(teacher.official_email)
+                if teacher.official_email: recipient_emails.add(teacher.official_email)
+                if teacher.mobile: recipient_numbers.add(teacher.mobile.strip()) # NEW
 
-        # --- Create and Save the Notice ---
+        # --- Create and Save the Notice (Unchanged) ---
         notice = Notice(
             title=form_data.get('title'),
             subject=form_data.get('subject', ''),
@@ -717,34 +717,34 @@ def create_notice(current_user):
         )
         notice.save()
         
-        # --- Send Email with Attachments ---
+        # --- Trigger Sending ---
+        # Email (Unchanged)
         if notice.status == 'published' and send_options.get('email') and recipient_emails:
-            print(f"✅ Preparing to send email to {len(recipient_emails)} recipients with {len(attachment_paths)} attachments.")
             send_bulk_email(
                 recipient_emails=list(recipient_emails),
                 subject=notice.subject or notice.title,
                 body=notice.content,
                 attachments=attachment_paths
             )
-        elif notice.status == 'published':
-             print(f"✅ Notice '{notice.title}' published, but email option was not selected or no recipients were found.")
 
+        # NEW: WhatsApp Sending Logic
+        if notice.status == 'published' and send_options.get('whatsapp') and recipient_numbers:
+            whatsapp_body = f"New Notice Published:\n\n*{notice.title}*\n\n{notice.subject or 'Please check the portal for details.'}"
+            send_bulk_whatsapp(
+                recipient_numbers=list(recipient_numbers),
+                message_body=whatsapp_body
+            )
+        
         return jsonify({"message": "Notice created successfully", "noticeId": str(notice.id)}), 201
         
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     finally:
-        # --- Cleanup: Remove temporary files ---
+        # Cleanup (Unchanged)
         if attachment_paths:
-            print("Cleaning up temporary attachment files...")
             for path in attachment_paths:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                        print(f"Removed temporary file: {path}")
-                except Exception as e:
-                    print(f"Error removing temporary file {path}: {e}")
+                if os.path.exists(path): os.remove(path)
 
 @app.route('/api/departments', methods=['GET'])
 @token_required
@@ -1342,6 +1342,7 @@ def add_student_manual(current_user):
             section=data.get('section'),
             name=data.get('name'),
             univ_roll_no=univ_roll_no,
+            student_mobile=data.get('student_mobile'), # ADD THIS LINE
             father_name=data.get('father_name'),
             father_mobile=data.get('father_mobile'),
             official_email=data.get('official_email', '').lower(),

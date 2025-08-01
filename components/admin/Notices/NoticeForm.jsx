@@ -24,7 +24,8 @@ export default function NoticeForm() {
             recipientEmails: [],
             priority: "Normal",
             attachments: [],
-            sendOptions: { email: true, web: true },
+            // sendOptions: { email: true, web: true },
+            sendOptions: { email: true, web: true, whatsapp: false },
         }
     });
 
@@ -289,6 +290,10 @@ export default function NoticeForm() {
                                     <label className="flex items-center cursor-pointer">
                                         <Controller name="sendOptions.email" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />} />
                                         <span className="text-sm">Email</span>
+                                    </label>
+                                    <label className="flex items-center cursor-pointer">
+                                        <Controller name="sendOptions.whatsapp" control={control} render={({ field }) => <input type="checkbox" {...field} checked={field.value} className="h-4 w-4 mr-2 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />} />
+                                        <span className="text-sm">WhatsApp</span>
                                     </label>
                                 </div>
                             </div>
