@@ -184,7 +184,7 @@ class Teacher(Document):
     created_at = DateTimeField(default=datetime.datetime.utcnow)
     
     meta = {
-        'collection': 'teachers',
+        'collection': 'employee',
         'indexes': [
             'employee_id',
             'department',
@@ -1507,4 +1507,3 @@ def seed_departments():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
-
