@@ -22,9 +22,8 @@ export default function NoticeForm() {
             year: [],
             section: [],
             recipientEmails: [],
-            priority: "Normal",
+            priority: "", // MODIFIED: No default priority is selected
             attachments: [],
-            // sendOptions: { email: true, web: true },
             sendOptions: { email: true, web: true, whatsapp: false },
         }
     });
@@ -38,6 +37,7 @@ export default function NoticeForm() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false); // ADDED: State for analysis button
     const navigate = useNavigate();
     const token = localStorage.getItem("token");
 
@@ -48,7 +48,7 @@ export default function NoticeForm() {
     const selectedCourseNames = watch("course");
     const selectedYears = watch("year");
     const attachments = watch("attachments");
-    const recipientEmails = watch("recipientEmails"); // Watch for UI updates
+    const recipientEmails = watch("recipientEmails");
 
     // --- STABLE DEPENDENCIES FOR USEEFFECT ---
     const stringifiedDeptCodes = useMemo(() => JSON.stringify(selectedDeptCodes), [selectedDeptCodes]);
@@ -131,7 +131,6 @@ export default function NoticeForm() {
     }, [stringifiedDeptCodes, stringifiedCourseNames, stringifiedYears, token, setValue, departmentOptions]);
 
     const onSubmit = async (data, publish = true) => {
-        // ... (onSubmit logic is correct and remains unchanged) ...
         setIsLoading(true);
         const formData = new FormData();
         const departmentObjects = departmentOptions.filter(d => data.department.includes(d.code));
@@ -171,7 +170,6 @@ export default function NoticeForm() {
     const removeAttachment = (index) => setValue("attachments", watch("attachments").filter((_, i) => i !== index));
     const handleCancel = () => navigate("/notices");
     
-    // RESTORED: Handlers for the email input
     const handleEmailInput = (e) => {
         if (e.key === 'Enter' || e.key === ',') {
           e.preventDefault();
@@ -246,7 +244,6 @@ export default function NoticeForm() {
                                 </div>
                             </div>
                             
-                            {/* RESTORED: Additional Recipients Input */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Additional Recipients</label>
                                 <div className="p-2 border border-gray-300 rounded-md">
@@ -272,11 +269,59 @@ export default function NoticeForm() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                                 <div className="grid grid-cols-3 gap-2">
-                                {priorityOptions.map(option => (
-                                    <button key={option} type="button" onClick={() => setValue("priority", option)} className={`py-2 px-3 rounded-md text-sm transition-colors ${watch("priority") === option ? 'bg-blue-500 text-white shadow' : 'bg-gray-100 hover:bg-gray-200'}`}>
-                                        {option}
+                                    {priorityOptions.map(option => (
+                                        <button
+                                            key={option}
+                                            type="button"
+                                            onClick={() => setValue("priority", option)}
+                                            className={`py-2 px-3 rounded-md text-sm transition-colors ${
+                                                watch("priority") === option ? 'bg-blue-500 text-white shadow' : 'bg-gray-100 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {option}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* === MODIFIED: Analyse Priority Button === */}
+                                <div className="mt-3">
+                                    <button
+                                        type="button"
+                                        disabled={isAnalyzing}
+                                        onClick={async () => {
+                                            setIsAnalyzing(true);
+                                            setError(null);
+                                            const subject = watch("subject");
+                                            const body = watch("noticeBody");
+
+                                            try {
+                                                const res = await fetch("http://localhost:5001/api/predict-priority", {
+                                                    method: "POST",
+                                                    headers: {
+                                                        "Content-Type": "application/json"
+                                                    },
+                                                    body: JSON.stringify({
+                                                        subject,
+                                                        body
+                                                    })
+                                                });
+
+                                                const data = await res.json();
+                                                if (res.ok && data.priority) {
+                                                    setValue("priority", data.priority);
+                                                } else {
+                                                    setError(data.error || "Prediction failed.");
+                                                }
+                                            } catch (err) {
+                                                setError("Failed to connect to the prediction service.");
+                                            } finally {
+                                                setIsAnalyzing(false);
+                                            }
+                                        }}
+                                        className="w-full mt-2 py-2 px-3 rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-all disabled:bg-purple-400"
+                                    >
+                                        {isAnalyzing ? "Analyzing..." : "Analyse Priority"}
                                     </button>
-                                ))}
                                 </div>
                             </div>
 

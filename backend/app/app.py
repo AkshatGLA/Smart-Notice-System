@@ -1355,6 +1355,42 @@ def add_student_manual(current_user):
     except Exception as e:
         return jsonify({"error": f"An unexpected server error: {str(e)}"}), 500
     
+# Place this near other routes
+@app.route("/api/predict-priority", methods=["POST"])
+def predict_priority():
+    try:
+        data = request.json
+        subject = data.get("subject", "")
+        body = data.get("body", "")
+
+        if not subject and not body:
+            return jsonify({"error": "Subject or body is required"}), 400
+
+        from transformers import TFRobertaForSequenceClassification, RobertaTokenizer
+        import tensorflow as tf
+
+        MODEL_PATH = "/home/somani/Desktop/akshat-smart-agent/models/roberta_priority_classifier_final/content/roberta_priority_classifier_final"
+
+        tokenizer = RobertaTokenizer.from_pretrained(MODEL_PATH)
+        model = TFRobertaForSequenceClassification.from_pretrained(MODEL_PATH, from_pt=False)
+
+        label_map = {
+            0: "Normal",
+            1: "Urgent",
+            2: "Highly Urgent"
+        }
+
+        full_text = f"{subject} {body}"
+        inputs = tokenizer(full_text, return_tensors="tf", truncation=True, padding=True)
+        logits = model(**inputs).logits
+        predicted_class = tf.argmax(logits, axis=1).numpy()[0]
+        priority = label_map.get(predicted_class, "Normal")
+
+        return jsonify({"priority": priority}), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # Get students by branch/course (for notice targeting)
 @app.route("/api/students", methods=["GET"])
