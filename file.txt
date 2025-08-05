@@ -11,3 +11,95 @@ student_mobile (Recommended) - The student's mobile number.
 father_name (Recommended) - The student's father's name.
 
 father_mobile (Recommended) - The father's mobile number.
+
+
+
+subjects = [
+        "Lost of 2 Gold rings",
+        "Last Reminder-C Corner",
+        "Notice Regarding Semester Project Requirements"
+    ]
+
+    bodies = [
+        """
+Dear All,
+
+This is to inform all students and staff that a second-year BBA-MS student,
+has reported the loss of his 2 Gold Rings at University Main Gate No. 2
+
+If anyone finds the Rings they are kindly requested to return it directly
+to *Room No. 2, AB-6 at the earliest.*
+
+
+*Ayushi Pareek*
+*Assistant Manager*
+*IBM*
+
+-- 
+GLA University
+
+""",
+"""
+Dear Students,
+
+Greetings!!!
+
+Kindly share your CV to the shared mail Id, if you will not share till now.
+Only those students will be eligible for the internship who shared the CV.
+
+*Deadline  will be:9/2/2025 till 10:00 AM*
+
+
+
+*Apply Now! If you’re ready to take the first step toward a successful
+engineering career, send your resume and cover letter to
+bhasker.das@csharp.com <bhasker.das@csharp.com> with the subject line
+"Internship Application - [Your Name]."*
+
+*Thanks/Regards *
+
+
+*Vanshita Jain*
+
+GLA University India
+
+vanshita.jain@gla.ac.in
+
+*Mob: 9667302753*
+
+Website: www.gla.ac.in
+
+-- 
+GLA University
+""",
+
+"""
+Dear Students,
+
+This is to inform you that project topics have been assigned along with
+designated mentors, and these problem statements *will not* be changed *under
+any circumstances*. The synopsis format is provided, along with the
+evaluation scheme; it must be followed exactly.
+
+Your *first presentation round will take place on 14th February, 2025*. All
+teams are hereby *strictly warned* that they must meet with their assigned
+mentors *weekly*. A weekly progress report—*signed by the mentor*—is
+mandatory. *Failure to meet* with the mentor or submit a signed progress
+report *will result in an immediate mark of zero* for that week, and
+repeated non-compliance will lead to *failure of the semester-project* and
+subsequent carryover.
+
+Please note that *no excuses* will be entertained. This is a *serious
+departmental directive*: any student or team that neglects these
+requirements will face *strict academic penalties*. Ensure *all* team
+members are present for weekly meetings.
+
+Prepare your synopsis and get it signed by your mentor for the
+presentation. You are expected to *comply* fully with these instructions.
+
+*No exceptions* will be made.
+
+GLA University
+
+-- 
+GLA University
